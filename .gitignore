@@ -3,3 +3,7 @@ dist/
 .tmp/
 *.log
 .DS_Store
+node_modules/
+.tmp/
+pnpm-lock.yaml
+pnpm-workspace.yaml

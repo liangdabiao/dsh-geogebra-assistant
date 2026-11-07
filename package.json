@@ -14,17 +14,40 @@
   },
   "icon": "./icon.svg",
   "files": [
-    "src", "dist", "lib",
+    "src",
+    "dist",
+    "lib",
     "skills",
-    "locale/*.json", "cordis.patch.yml", "icon.svg", "README.md", "LICENSE"
+    "locale/*.json",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
   ],
-  "keywords": ["dsh-plugin", "deepseek-harness", "geogebra", "math", "visualization"],
-  "engines": { "node": "^22.19.0 || >=24.0.0", "dsh": ">=0.2.1-rc.2 <0.3.0" },
-  "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "platform": "web", "immediately": true, "inject": [] }
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "geogebra",
+    "math",
+    "visualization"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.2 <0.3.0"
   },
-  "devDependencies": { "esbuild": "^0.25.10" },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.10"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node test/lib.test.mjs",
