@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GeoGebra 数学画板",
+    "description": "面板内嵌 GeoGebra 画板：模型生成数学图形命令后在画板上执行预览，含中文别名规范化和 LaTeX 纠错。"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "GeoGebra Math Board",
+    "description": "Embedded GeoGebra board: model generates math commands, panel executes and previews them. Chinese alias and LaTeX normalization included."
+  }
+}

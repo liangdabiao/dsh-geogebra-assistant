@@ -1,0 +1,34 @@
+{
+  "name": "dsh-geogebra-assistant",
+  "version": "0.1.0",
+  "description": "GeoGebra 数学画板助手：面板内嵌 GeoGebra CDN 画板，模型生成命令后在画板上执行并预览，含中文别名/LaTeX 规范化。",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/host.js",
+  "exports": {
+    ".": "./src/host.js",
+    "./client": "./dist/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "icon": "./icon.svg",
+  "files": [
+    "src", "dist", "lib",
+    "skills",
+    "locale/*.json", "cordis.patch.yml", "icon.svg", "README.md", "LICENSE"
+  ],
+  "keywords": ["dsh-plugin", "deepseek-harness", "geogebra", "math", "visualization"],
+  "engines": { "node": "^22.19.0 || >=24.0.0", "dsh": ">=0.2.1-rc.2 <0.3.0" },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web", "immediately": true, "inject": [] }
+  },
+  "devDependencies": { "esbuild": "^0.25.10" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node test/lib.test.mjs",
+    "selftest": "node scripts/selftest.mjs",
+    "prepack": "npm run build"
+  }
+}

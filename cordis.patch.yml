@@ -1,0 +1,5 @@
+# GeoGebra 数学画板助手：技能 + CDN 内嵌画板 + 命令规范化工具。
+# 浏览器半边由 dsh.client 声明加载。
+- insert:
+    - id: geogebra-assistant
+      name: 'dsh-geogebra-assistant'
