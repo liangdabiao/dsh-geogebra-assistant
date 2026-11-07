@@ -34,6 +34,13 @@ npm install && npm test && npm run selftest && npm run build
 - `npm test`：8 个单测（中文别名多字优先/全角标点/LaTeX 清理/多行分割/技能铁律/面板鉴权）
 - `npm run selftest`：规范化 + 技能 + 面板 API，零网络
 
+
+## 安装
+
+```bash
+dsh plugin --profile web add dsh-geogebra-assistant
+```
+
 ## 许可
 
 MIT。实现参考 [Geogebra-WebChat](https://github.com/liangdabiao/Geogebra-WebChat)（liangdabiao）的 `src/lib/normalize.ts`。GeoGebra 版权归 GeoGebra GmbH。
