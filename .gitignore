@@ -1,9 +1,10 @@
 node_modules/
-dist/
 .tmp/
 *.log
 .DS_Store
-node_modules/
-.tmp/
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# dist/ 故意入库：dsh 宿主直接消费已构建的客户端 bundle（package.json 的 exports["./client"]），
+# 从 github: 安装时没有 dist/client.js 会导致插件激活失败、侧栏面板不出现。
+# 改完源码请跑 npm run build 再提交。
