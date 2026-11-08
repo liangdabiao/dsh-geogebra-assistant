@@ -1,6 +1,6 @@
 {
   "name": "dsh-geogebra-assistant",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "GeoGebra 数学画板助手：对话里说一句/发张题目图，模型调 geogebra_draw 直接出图；支持导出 .ggb/PNG/SVG/TikZ，含中文别名与 LaTeX 规范化。",
   "license": "MIT",
   "type": "module",

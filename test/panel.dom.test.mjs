@@ -37,14 +37,28 @@ test('面板 AI 作图链路（jsdom）', { skip: deps ? false : '未安装 jsdo
   globalThis.HTMLElement = window.HTMLElement
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-  // GeoGebra 桩：记录调用，注入时立刻回调 appletOnLoad
+  // GeoGebra 桩：记录调用，注入时立刻回调 appletOnLoad。
+  // 关键：模仿真机的坑——Set*/SetPerspective 这类「不新建对象」的命令即使生效也返回 false，
+  // 面板不能再把它当失败（否则会把画好的图当成失败并回滚）。
   const applets = []
+  const ggbState = { names: [] }
   window.GGBApplet = function GGBApplet(params) {
     const applet = this
     applet.calls = []
     applet.resets = 0
-    applet.evalCommand = (cmd) => { applet.calls.push(cmd); return true }
-    applet.newConstruction = () => { applet.resets++; applet.calls.length = 0 }
+    applet.evalCommand = (cmd) => {
+      const s = String(cmd).trim()
+      applet.calls.push(s)
+      if (/^(Set[A-Za-z]*|Show[A-Za-z]*|Hide[A-Za-z]*|Zoom[A-Za-z]*|Pan|SetPerspective)\s*\(/i.test(s)) return false // 非新建型：false 但生效
+      if (/BAD/.test(s)) return false // 真失败
+      const named = /^([A-Za-z_][A-Za-z0-9_]*)\s*[=(]/.exec(s)
+      if (!named) return false
+      // 真 GeoGebra 里 A=(0,0) 建的对象就叫 A，Segment/SetColor 的引用也用这个名字
+      ggbState.names.push(named[1])
+      return true
+    }
+    applet.getAllObjectNames = () => ggbState.names.slice()
+    applet.newConstruction = () => { applet.resets++; applet.calls.length = 0; ggbState.names.length = 0 }
     applet.setHTML5Codebase = (url) => { applet.codebase = url }
     applet.inject = () => { window.ggbApplet = applet; params.appletOnLoad() }
     applets.push(applet)
@@ -122,19 +136,42 @@ test('面板 AI 作图链路（jsdom）', { skip: deps ? false : '未安装 jsdo
   assert.equal(applet.resets, 1, 'reset=false 不应清空')
   assert.ok(applet.calls.includes('D=(5,5)'), '增量命令应执行')
 
-  // ---- 失败自动回滚：有失败 → 还原快照；可手动保留成功部分；可关掉开关 ----
+  // ---- 样式命令（Set*/SetPerspective）回 false 但已生效：不能算失败、不能回滚 ----
   applet.xmlRestores = []
   applet.getXML = () => '<construction id="snap"/>'
   applet.setXML = (xml) => { applet.xmlRestores.push(xml) }
-  applet.evalCommand = (cmd) => { applet.calls.push(cmd); return cmd !== 'BAD(A)' }
 
   await act(async () => {
     FakeEventSource.last.onmessage({
-      data: JSON.stringify({ seq: 3, type: 'draw', commands: ['A=(0,0)', 'BAD(A)', 'B=(1,1)'], reset: false }),
+      data: JSON.stringify({
+        seq: 3,
+        type: 'draw',
+        commands: ['SetPerspective("T")', 'P=(2,2)', 'SetColor(P,1,0,0)', 'SetPointSize(P,6)'],
+        reset: false,
+      }),
     })
   })
-  assert.equal(applet.xmlRestores.length, 1, '有失败时应回滚一次')
-  assert.equal(applet.xmlRestores[0], '<construction id="snap"/>', '回滚应使用执行前的快照')
+  assert.equal(applet.xmlRestores.length, 0, '样式命令回 false 不应触发回滚')
+  assert.match(document.body.textContent, /4 条命令全部执行成功/, '应认为 4 条都成功')
+  assert.match(document.body.textContent, /另有 3 条样式命令/, '应说明样式命令已生效')
+
+  // 样式命令的目标对象不存在 → 才是真失败
+  await act(async () => {
+    FakeEventSource.last.onmessage({
+      data: JSON.stringify({ seq: 4, type: 'draw', commands: ['SetColor(不存在,1,0,0)'], reset: false }),
+    })
+  })
+  assert.equal(applet.xmlRestores.length, 1, '目标对象不存在的样式命令应算失败并回滚')
+  assert.match(document.body.textContent, /不存在，样式没生效/)
+
+  // ---- 失败自动回滚：真失败 → 还原快照；可手动保留成功部分；可关掉开关 ----
+  await act(async () => {
+    FakeEventSource.last.onmessage({
+      data: JSON.stringify({ seq: 5, type: 'draw', commands: ['A=(0,0)', 'BAD(A)', 'B=(1,1)'], reset: false }),
+    })
+  })
+  assert.equal(applet.xmlRestores.length, 2, '有真失败时应回滚')
+  assert.equal(applet.xmlRestores.at(-1), '<construction id="snap"/>', '回滚应使用执行前的快照')
   assert.match(document.body.textContent, /已回滚/)
 
   const keepBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('保留成功的'))
@@ -153,14 +190,16 @@ test('面板 AI 作图链路（jsdom）', { skip: deps ? false : '未安装 jsdo
   assert.ok(rollbackBox, '应有「失败自动回滚」开关')
   await act(async () => { rollbackBox.click() })
   await act(async () => {
-    FakeEventSource.last.onmessage({ data: JSON.stringify({ seq: 4, type: 'draw', commands: ['BAD(X)'], reset: false }) })
+    FakeEventSource.last.onmessage({ data: JSON.stringify({ seq: 6, type: 'draw', commands: ['BAD(X)'], reset: false }) })
   })
-  assert.equal(applet.xmlRestores.length, 1, '关掉开关后不应再回滚')
+  assert.equal(applet.xmlRestores.length, 2, '关掉开关后不应再回滚')
 
   // ---- 导出：.ggb / PNG / SVG / TikZ（引擎原生）+ TikZ 快照兜底 ----
   const downloads = []
   const originalCreate = globalThis.URL.createObjectURL
   const originalRevoke = globalThis.URL.revokeObjectURL
+  const originalClick = window.HTMLAnchorElement.prototype.click
+  window.HTMLAnchorElement.prototype.click = function noop() {} // jsdom 会真去导航，这里拦掉
   globalThis.URL.createObjectURL = (blob) => { downloads.push(blob); return `blob:mock/${downloads.length}` }
   globalThis.URL.revokeObjectURL = () => {}
 
@@ -219,3 +258,8 @@ test('面板 AI 作图链路（jsdom）', { skip: deps ? false : '未安装 jsdo
 
   await act(async () => { root.unmount() })
 })
+
+
+
+
+

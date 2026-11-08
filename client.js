@@ -13,6 +13,18 @@ const { useState, useEffect, useRef } = require('react')
 const { parseConstructionXml, exportTikZ } = require('./lib/tikz.js')
 const { downloadBase64, downloadText, timestampName } = require('./lib/download.js')
 
+/** GeoGebra 里「不新建对象」的命令前缀：它们执行成功后 evalCommand 一般也返回 false，
+ *  不能拿返回值当成败依据（这是面板把好图误判成失败并回滚的根因）。
+ *  这类命令只做「改变已有对象/视图状态」，失败的唯一可靠信号是**目标对象不存在**。 */
+const NON_CREATING = /^(Set[A-Z_a-z]*|Show[A-Z_a-z]*|Hide[A-Z_a-z]*|Zoom[A-Z_a-z]*|Pan|StartAnimation|StopAnimation|Delete|Rename|Select|SetActiveView|CenterView|Corner|UpdateConstruction)\s*\(/i
+
+/** 取命令的第一个参数（用于判断样式命令的目标对象是否存在）。 */
+function firstArgument(cmd) {
+  const m = /^[A-Za-z][A-Za-z0-9_]*\s*\(\s*([^,)]+)/.exec(String(cmd).trim())
+  return m ? m[1].trim() : ''
+}
+
+const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u // 允许中文等 Unicode 对象名（GeoGebra 支持）
 const PANEL_ID = 'geogebra-assistant'
 const BASE = 'geogebra-assistant'
 const BOARD_TIMEOUT_MS = 20_000
@@ -144,23 +156,54 @@ function Board() {
   const rollbackRef = useRef(true) // 供 effect 内的回调读到最新值（避免闭包过期）
 
   /** 执行一批命令（按钮和 AI 推送共用）。只用 ref / setState，可安全放在 effect 里。
-   *  allowRollback：执行前存 XML 快照，只要有一条失败就把画板还原回快照，
-   *  避免模型写错一条命令就留下一张"半成品脏图"（原版只在全部失败时才回滚）。 */
+   *
+   *  失败判定（踩过的坑）：GeoGebra 的 evalCommand 对「不新建对象」的命令（SetPerspective /
+   *  SetColor / SetLineThickness …）即使成功也返回 false。所以：
+   *    ① 返回值 true → 成功；
+   *    ② 返回 false 但对象总数变多 → 成功（建出了新对象）；
+   *    ③ 返回 false 且是样式/视图类命令 → 只要目标对象存在就算成功（记为 soft，不触发回滚）；
+   *       目标对象不存在才算真失败（例如 SetColor(拼错的名字,…)）；
+   *    ④ 其余 false → 真失败（命令名写错 / 参数非法）。
+   *
+   *  allowRollback：执行前存 XML 快照，**真失败**才把画板还原回快照。 */
   const runLines = (lines, { reset = false, allowRollback = true } = {}) => {
     const applet = appletRef.current
-    if (!applet) return { total: lines.length, failed: ['画板尚未就绪'], normalized: lines, okLines: [] }
+    if (!applet) return { total: lines.length, failed: ['画板尚未就绪'], normalized: lines, okLines: [], soft: [] }
     const snapshot = allowRollback ? safeString(() => applet.getXML()) : ''
-    if (reset) { try { applet.newConstruction() } catch { /* 旁路 */ } }
+    const names = () => (hasFn(applet, 'getAllObjectNames') ? Array.from(applet.getAllObjectNames() || []).map(String) : [])
+    let live = new Set(names())
+    if (reset) { try { applet.newConstruction() } catch { /* 旁路 */ } ; live = new Set(names()) }
+
     const failed = []
     const okLines = []
+    const soft = []
     for (const cmd of lines) {
+      let ret
       try {
-        if (applet.evalCommand(cmd)) okLines.push(cmd)
-        else failed.push(cmd)
+        ret = applet.evalCommand(cmd)
       } catch (e) {
         failed.push(`${cmd}（${e.message}）`)
+        continue
       }
+      const after = names()
+      const created = after.some((n) => !live.has(n)) // 只看「有没有新名字」，不比长度（重名会把长度比搞错）
+      for (const n of after) live.add(n)
+
+      if (ret === true || created) { okLines.push(cmd); continue }
+
+      if (NON_CREATING.test(cmd)) {
+        const target = firstArgument(cmd)
+        // 样式命令的目标若是「对象名」却不存在 → 这才是真失败
+        if (target && IDENTIFIER.test(target) && !live.has(target)) {
+          failed.push(`${cmd}（对象 ${target} 不存在，样式没生效）`)
+        } else {
+          soft.push(cmd) // GeoGebra 对这类命令回 false，但状态已改，不能算失败
+        }
+        continue
+      }
+      failed.push(cmd)
     }
+
     let rolledBack = false
     if (failed.length && allowRollback && snapshot && hasFn(applet, 'setXML')) {
       try {
@@ -168,7 +211,7 @@ function Board() {
         rolledBack = true
       } catch { /* 该版本不支持还原就保持现状，至少把失败命令报出来 */ }
     }
-    return { total: lines.length, failed, okLines, normalized: lines, rolledBack }
+    return { total: lines.length, failed, okLines, soft, normalized: lines, rolledBack }
   }
 
   // 读取配置（CDN 地址 / codebase）
@@ -425,6 +468,10 @@ function Board() {
               (result.rolledBack ? ' · 已回滚，画板保持执行前的样子' : '')
             : `✓ ${result.total} 条命令全部执行成功`)),
         result.fromAi && result.title ? h('div', { style: { ...styles.muted, marginTop: 4 } }, result.title) : null,
+        result.soft && result.soft.length
+          ? h('div', { style: { ...styles.muted, marginTop: 4 } },
+              `另有 ${result.soft.length} 条样式命令（SetColor/SetLineThickness 等）：GeoGebra 对这类命令返回 false，实际已生效`)
+          : null,
         result.failed.length ? h('div', { style: { ...styles.muted, marginTop: 4 } }, '失败命令：' + result.failed.join(' | ')) : null,
         result.rolledBack && result.okLines && result.okLines.length
           ? h('div', { style: styles.row },
@@ -489,5 +536,8 @@ function apply(ctx) {
 exports.isPlugin = true
 exports.inject = ['slots']
 exports.apply = apply
+
+
+
 
 
