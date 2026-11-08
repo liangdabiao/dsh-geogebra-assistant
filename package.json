@@ -1,7 +1,7 @@
 {
   "name": "dsh-geogebra-assistant",
-  "version": "0.1.0",
-  "description": "GeoGebra 数学画板助手：面板内嵌 GeoGebra CDN 画板，模型生成命令后在画板上执行并预览，含中文别名/LaTeX 规范化。",
+  "version": "0.3.1",
+  "description": "GeoGebra 数学画板助手：对话里说一句/发张题目图，模型调 geogebra_draw 直接出图；支持导出 .ggb/PNG/SVG/TikZ，含中文别名与 LaTeX 规范化。",
   "license": "MIT",
   "type": "module",
   "main": "src/host.js",
@@ -46,11 +46,14 @@
     }
   },
   "devDependencies": {
-    "esbuild": "^0.25.10"
+    "esbuild": "^0.25.10",
+    "jsdom": "^26.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node test/lib.test.mjs",
+    "test": "node --test \"test/*.test.mjs\"",
     "selftest": "node scripts/selftest.mjs",
     "prepack": "npm run build"
   },

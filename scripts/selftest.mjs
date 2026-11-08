@@ -63,6 +63,47 @@ await step('面板 API 健康/配置/规范化（内存 ctx 模拟）', async ()
   if (!cfg.cdnBase.includes('deployggb')) throw new Error('config 错误')
 })
 
+await step('AI 作图链路：geogebra_draw → 事件总线', async () => {
+  const { drawTool } = await import('../src/host.js')
+  const bus = await import('../lib/bus.js')
+  bus.resetBus()
+  const out = await drawTool.execute({ commands: '圆(A,3)', title: '自检圆', reset: true })
+  if (!out.ok) throw new Error(out.summary)
+  const [event] = bus.eventsSince(0)
+  if (!event) throw new Error('工具没往总线推事件')
+  if (event.commands[0] !== 'Circle(A,3)') throw new Error('推送前没规范化')
+  if (!event.reset) throw new Error('reset 标记丢失')
+  bus.resetBus()
+})
+
+await step('面板事件流：SSE 首连补最近一条 + 实时推送', async () => {
+  const { registerApi } = await import('../lib/api.js')
+  const bus = await import('../lib/bus.js')
+  bus.resetBus()
+  let handler
+  await registerApi(
+    { get: () => ({ requestRejection: () => false }), webServer: { register: async ({ handler: h }) => { handler = h } } },
+    {},
+  )
+  bus.publishDraw({ commands: ['A=(0,0)'] })
+  bus.publishDraw({ commands: ['B=(1,1)'] })
+  const chunks = []
+  const res = {
+    writeHead(s, hd) { this.status = s; this.headers = hd; return this },
+    write(c) { chunks.push(String(c)); return true },
+    end() {}, on(ev, cb) { if (ev === 'close') this._close = cb },
+  }
+  await handler({ method: 'GET', url: '/geogebra-assistant/api/events?since=0', headers: {}, on() {} }, res)
+  if (res.status !== 200 || !String(res.headers['content-type']).includes('text/event-stream')) throw new Error('不是 SSE 响应')
+  const body = chunks.join('')
+  if (!body.includes('"type":"ready"')) throw new Error('缺 ready 帧')
+  if ((body.match(/"type":"draw"/g) || []).length !== 1) throw new Error('首连应只补最近一条')
+  bus.publishDraw({ commands: ['C=(2,2)'] })
+  if (!chunks.join('').includes('"seq":3')) throw new Error('实时事件没写进流')
+  if (res._close) res._close()
+  bus.resetBus()
+})
+
 if (failed > 0) {
   console.error(`\n自检失败 ${failed} 项`)
   process.exit(1)
