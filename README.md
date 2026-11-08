@@ -4,6 +4,9 @@ DeepSeek Harness（dsh）插件：**在对话里说一句话，图形自动出�
 
 参考 [Geogebra-WebChat](https://github.com/liangdabiao/Geogebra-WebChat)（MIT）。与原版的差异：**命令推送由宿主工具完成，面板不再自己跑一套 LLM 循环**；GeoGebra 从官方 CDN 加载，插件包只有 ~10KB（原版内置 50MB 离线资源）。
 
+<img width="1821" height="1401" alt="image" src="https://github.com/user-attachments/assets/d2c8cde1-5d10-4133-b0a0-730a66e4f5e1" />
+
+
 ## 装上以后有什么
 
 | 能力 | 说明 |
