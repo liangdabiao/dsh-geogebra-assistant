@@ -111,7 +111,7 @@ npm install && npm test && npm run selftest && npm run build
 
 ```bash
 # 从 GitHub 直接装（dist/client.js 已入库，装完即可用）
-dsh plugin --profile web add github:liangdabiao/dsh-geogebra-assistant
+dsh plugin --profile web add https://github.com/liangdabiao/dsh-geogebra-assistant
 
 # 本地开发（改源码后 HMR + 条目重启）
 dsh plugin --profile web add D:/path/to/dsh-geogebra-assistant
